@@ -171,12 +171,6 @@ def crawl_marathon_schedule():
 
         base_lat, base_lng = loc_coords[m["location"]]
         
-        # scraper.py 내부
-        # 1. 이미지를 검증하는 함수를 하나 추가하세요
-        def get_valid_image(url):
-            # 만약 URL이 없거나, 혹은 나중에 우리가 직접 검증할 수 있다면 좋지만
-            # 지금은 일단 https 강제 변환만 수행
-            return url.replace('http://', 'https://')
         data.append({
             "title": m["title"],
             "location": m["location"],
@@ -192,7 +186,7 @@ def crawl_marathon_schedule():
             "link": m["link"], # 개별 다이렉트 링크!
             "lat": base_lat + random.uniform(-0.1, 0.1),
             "lng": base_lng + random.uniform(-0.1, 0.1),
-            "poster": get_valid_image(m.get("poster", "")),  # 실제 포스터(og:image) 우선, 실패 시 테마 대체 이미지
+            "poster": get_poster_image(m["link"], m["title"], m["theme"])  # 실제 포스터(og:image) 우선, 실패 시 테마 대체 이미지
         })
 
     return pd.DataFrame(data)
