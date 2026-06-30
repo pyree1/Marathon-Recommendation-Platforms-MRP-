@@ -317,7 +317,15 @@ with col_list:
                         poster_url = row['poster'] if pd.notnull(row['poster']) else "https://via.placeholder.com/300x200"
                         if 'image_url' in filtered_df.columns:
                             filtered_df['image_url'] = filtered_df['image_url'].str.replace('http://', 'https://')
-                        st.image(poster_url, use_container_width=True)
+                        if poster_url and isinstance(poster_url, str) and poster_url.startswith('http'):
+                            st.image(poster_url, use_container_width=True)
+                        else:
+                            # 이미지가 없을 경우 빈 공간 대신 표시할 문구 또는 기본 이미지
+                            st.markdown("""
+                             <div style="height: 150px; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0; border-radius: 10px; color: #888;">
+                               이미지 준비 중
+                               </div>
+                              """, unsafe_allow_html=True)
                     
                     with card_left:
                         st.markdown(f"<div class='theme-badge'>{row['theme']}</div>", unsafe_allow_html=True)
