@@ -358,6 +358,7 @@ with col_list:
 with col_map:
     st.markdown('<div class="section-title-large">📍 전국 맵 락인</div>', unsafe_allow_html=True)
     
+    # 1. 마커 스크립트 생성
     marker_js = ""
     for _, row in filtered_df.iterrows():
         if 'lat' in row and 'lng' in row:
@@ -382,13 +383,12 @@ with col_map:
                     }})(marker, infowindow));
                 """
 
-# =======================================================================
-    # 🗺️ 카카오맵 렌더링 HTML 및 GPS 자동 동기화 로직 (오류 수정본)
-    # =======================================================================
+    # 2. 지도 HTML 정의
     map_html = f"""
         <div id="map" style="width:100%; height:550px; border-radius:15px;"></div>
         
         <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785&autoload=false"></script>
+        
         <script>
             kakao.maps.load(function() {{
                 var mapContainer = document.getElementById('map');
@@ -401,17 +401,7 @@ with col_map:
                 var map = new kakao.maps.Map(mapContainer, mapOption); 
                 var activeInfoWindow = null;
                 
-                // 1. 좌측 사이드바에서 수동 선택한 좌표로 기본 세팅
-                var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
-                var mapOption = {{ 
-                    center: defaultPos, 
-                    level: 9 // 전국 단위 검색이 많으므로 레벨을 조금 넓게 설정
-                }}; 
-
-                var map = new kakao.maps.Map(mapContainer, mapOption); 
-                var activeInfoWindow = null;
-
-                // 2. 브라우저 GPS 권한 묻기 및 파란색 '내 위치' 마커 표시
+                // 1. 브라우저 GPS 권한 시도
                 if (navigator.geolocation) {{
                     navigator.geolocation.getCurrentPosition(function(position) {{
                         var lat = position.coords.latitude;
@@ -424,14 +414,9 @@ with col_map:
                             yAnchor: 1.5
                         }});
                         customOverlay.setMap(map);
-                        
-                        // GPS 권한을 허용했다면 지도의 중심을 내 실제 위치로 스무스하게 이동
                         map.panTo(locPosition);
-                        
                     }}, function(error) {{
-                        console.warn("GPS 권한 거부 또는 실패. 수동 선택된 기준점(사이드바)을 유지합니다.");
-                        
-                        // GPS 거부 시 수동 선택 지역에 회색 마커 표시
+                        console.warn("GPS 실패, 기본 거점 표시");
                         var fallbackOverlay = new kakao.maps.CustomOverlay({{
                             position: defaultPos,
                             content: '<div style="background-color:#64748B; color:white; padding:5px 10px; border-radius:20px; font-size:12px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.3);">📌 기준 거점</div>',
@@ -441,11 +426,13 @@ with col_map:
                     }});
                 }}
 
-                // 3. 파이썬에서 넘겨준 마라톤 대회 마커들 렌더링
+                // 2. 파이썬에서 넘겨준 마커 데이터 렌더링
                 {marker_js}
             }});
         </script>
     """
+    
+    # 3. 지도 렌더링 (col_map 블록 안에서 실행)
     st.components.v1.html(map_html, height=570)
 
 st.markdown("---")
