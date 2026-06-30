@@ -318,14 +318,18 @@ with col_list:
                         if 'image_url' in filtered_df.columns:
                             filtered_df['image_url'] = filtered_df['image_url'].str.replace('http://', 'https://')
                         if poster_url and isinstance(poster_url, str) and poster_url.startswith('http'):
-                            st.image(poster_url, use_container_width=True)
+                          try:
+                              st.image(poster_url, use_container_width=True)
+                          except:
+                                st.markdown("<div style='text-align:center; padding:20px;'>이미지 없음</div>", unsafe_allow_html=True)
                         else:
-                            # 이미지가 없을 경우 빈 공간 대신 표시할 문구 또는 기본 이미지
+                            # 이미지가 없거나 잘못된 경로일 경우 대신 표시할 HTML
                             st.markdown("""
-                             <div style="height: 150px; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0; border-radius: 10px; color: #888;">
-                               이미지 준비 중
-                               </div>
-                              """, unsafe_allow_html=True)
+                                 <div style="height: 150px; display: flex; align-items: center; justify-content: center; 
+                                 background-color: #f0f0f0; border-radius: 10px; color: #888;">
+                                  이미지 준비 중
+                                 </div>
+                             """, unsafe_allow_html=True)
                     
                     with card_left:
                         st.markdown(f"<div class='theme-badge'>{row['theme']}</div>", unsafe_allow_html=True)
@@ -366,81 +370,41 @@ with col_list:
 with col_map:
     st.markdown('<div class="section-title-large">📍 전국 맵 락인</div>', unsafe_allow_html=True)
     
-    # 1. 마커 스크립트 생성
+    # 1. 마커 데이터 생성
     marker_js = ""
     for _, row in filtered_df.iterrows():
-        if 'lat' in row and 'lng' in row:
-            if not pd.isna(row['lat']) and not pd.isna(row['lng']):
-                marker_js += f"""
-                    var markerPos = new kakao.maps.LatLng({row['lat']}, {row['lng']});
-                    var marker = new kakao.maps.Marker({{
-                        position: markerPos,
-                        clickable: true
-                    }});
-                    marker.setMap(map);
-                    
-                    var iwContent = '<div style="padding:10px;font-size:12px;color:#000;width:220px;font-family:sans-serif;"><b>{row['title']}</b><br><span style="color:#666;">{row['theme']}</span></div>';
-                    var infowindow = new kakao.maps.InfoWindow({{ content: iwContent }});
-                    
-                    kakao.maps.event.addListener(marker, 'click', (function(m, info) {{
-                        return function() {{
-                            if (activeInfoWindow) {{ activeInfoWindow.close(); }}
-                            info.open(map, m);
-                            activeInfoWindow = info;
-                        }};
-                    }})(marker, infowindow));
-                """
+        if pd.notna(row.get('lat')) and pd.notna(row.get('lng')):
+            marker_js += f"""
+                var markerPos = new kakao.maps.LatLng({row['lat']}, {row['lng']});
+                var marker = new kakao.maps.Marker({{ position: markerPos }});
+                marker.setMap(map);
+                
+                var infowindow = new kakao.maps.InfoWindow({{
+                    content: '<div style="padding:5px; font-size:12px;">{row.get("title", "대회")}</div>'
+                }});
+                kakao.maps.event.addListener(marker, 'click', function() {{ infowindow.open(map, marker); }});
+            """
 
-    # 2. 지도 HTML 정의
+    # 2. 지도 HTML (https 강제)
     map_html = f"""
         <div id="map" style="width:100%; height:550px; border-radius:15px;"></div>
-        
-        <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785&autoload=false"></script>
-        
+        <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785&autoload=false"></script>
         <script>
             kakao.maps.load(function() {{
-                var mapContainer = document.getElementById('map');
-                var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
-                var mapOption = {{ 
-                    center: defaultPos, 
-                    level: 9 
-                }}; 
-
-                var map = new kakao.maps.Map(mapContainer, mapOption); 
-                var activeInfoWindow = null;
+                var container = document.getElementById('map');
+                var options = {{
+                    center: new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG}),
+                    level: 9
+                }};
+                var map = new kakao.maps.Map(container, options);
                 
-                // 1. 브라우저 GPS 권한 시도
-                if (navigator.geolocation) {{
-                    navigator.geolocation.getCurrentPosition(function(position) {{
-                        var lat = position.coords.latitude;
-                        var lon = position.coords.longitude;
-                        var locPosition = new kakao.maps.LatLng(lat, lon);
-                        
-                        var customOverlay = new kakao.maps.CustomOverlay({{
-                            position: locPosition,
-                            content: '<div style="background-color:#2563EB; color:white; padding:5px 10px; border-radius:20px; font-size:12px; font-weight:bold; border: 2px solid white; box-shadow:0 2px 4px rgba(0,0,0,0.3);">📍 내 실제 위치</div>',
-                            yAnchor: 1.5
-                        }});
-                        customOverlay.setMap(map);
-                        map.panTo(locPosition);
-                    }}, function(error) {{
-                        console.warn("GPS 실패, 기본 거점 표시");
-                        var fallbackOverlay = new kakao.maps.CustomOverlay({{
-                            position: defaultPos,
-                            content: '<div style="background-color:#64748B; color:white; padding:5px 10px; border-radius:20px; font-size:12px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.3);">📌 기준 거점</div>',
-                            yAnchor: 1.5
-                        }});
-                        fallbackOverlay.setMap(map);
-                    }});
-                }}
-
-                // 2. 파이썬에서 넘겨준 마커 데이터 렌더링
+                // 마커 그리기
                 {marker_js}
             }});
         </script>
     """
     
-    # 3. 지도 렌더링 (col_map 블록 안에서 실행)
+    # 3. 지도 렌더링
     st.components.v1.html(map_html, height=570)
 
 st.markdown("---")
