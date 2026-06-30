@@ -312,6 +312,8 @@ with col_list:
                     with card_img:
                         # 💡 이미지 포스터가 없을 때를 대비한 꼼꼼한 체크
                         poster_url = row['poster'] if pd.notnull(row['poster']) else "https://via.placeholder.com/300x200"
+                        if 'image_url' in filtered_df.columns:
+                            filtered_df['image_url'] = filtered_df['image_url'].str.replace('http://', 'https://')
                         st.image(poster_url, use_container_width=True)
                     
                     with card_left:
@@ -381,13 +383,16 @@ with col_map:
     # 🗺️ 카카오맵 렌더링 HTML 및 GPS 자동 동기화 로직 (오류 수정본)
     # =======================================================================
     map_html = f"""
-        <div id="map" style="width:100%; height:550px; border-radius:15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+        <div id="map" style="width:100%; height:550px; border-radius:15px;"></div>
         
-        <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785"></script>
+        <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785&autoload=false"></script>
         <script>
-            // 페이지 로드 후 지도 초기화
-            setTimeout(function() {{
+            // API가 로드된 후 실행하도록 설정
+            kakao.maps.load(function() {{
                 var mapContainer = document.getElementById('map');
+                var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
+                var mapOption = {{ center: defaultPos, level: 9 }}; 
+                var map = new kakao.maps.Map(mapContainer, mapOption);
                 
                 // 1. 좌측 사이드바에서 수동 선택한 좌표로 기본 세팅
                 var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
