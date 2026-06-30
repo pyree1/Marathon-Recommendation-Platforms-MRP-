@@ -10,7 +10,27 @@ init_db()
 
 # 페이지 설정
 st.set_page_config(page_title="대한민국 마라톤 매칭 플랫폼", layout="wide")
+# main.py 파일 상단부 (st.set_page_config 바로 아래에 배치)
 
+# ─── 🔑 세션 상태(Session State) 초기화 블록 ───
+if 'survey_active' not in st.session_state: st.session_state.survey_active = False
+if 'survey_step' not in st.session_state: st.session_state.survey_step = 1
+if 'show_popup' not in st.session_state: st.session_state.show_popup = False
+
+# 퀴즈 상태 머신 임시 변수
+if 'tmp_concept' not in st.session_state: st.session_state.tmp_concept = "🌍 상관없음 (전체)"
+if 'tmp_style' not in st.session_state: st.session_state.tmp_style = "ALL (전체)"
+if 'tmp_distances' not in st.session_state: st.session_state.tmp_distances = ["10K"]
+if 'tmp_scale' not in st.session_state: st.session_state.tmp_scale = "ALL (전체)"
+if 'tmp_max_fee' not in st.session_state: st.session_state.tmp_max_fee = 120000
+
+# 확정 반영용 필터 스토리지
+if 'rec_concept' not in st.session_state: st.session_state.rec_concept = "🌍 상관없음 (전체)"
+if 'rec_style' not in st.session_state: st.session_state.rec_style = "ALL (전체)"
+if 'rec_scale' not in st.session_state: st.session_state.rec_scale = "ALL (전체)"
+if 'rec_distances' not in st.session_state: st.session_state.rec_distances = []
+if 'max_fee' not in st.session_state: st.session_state.max_fee = 150000
+# ───────────────────────────────────────────────
 # 고급 CSS 주입 (귀여우면서 직관적인 MZ 스타일 및 애니메이션 배지)
 st.markdown("""
     <style>
@@ -125,29 +145,58 @@ df = load_data()
 if 'poster' not in df.columns:
     df['poster'] = "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=150&q=80" # 기본 이미지
 
-USER_BASE_LAT = 36.8143
-USER_BASE_LNG = 127.1493
+# =======================================================================
+# 📍 대한민국 주요 시/도 및 시/군/구 중심 좌표 정의
+# =======================================================================
+REGION_COORDS = {
+    "서울특별시": {"전체": (37.5665, 126.9780)},
+    "경기도": {"수원시": (37.2636, 127.0286), "성남시": (37.4200, 127.1265), "고양시": (37.6584, 126.8320), "용인시": (37.2410, 127.1775), "부천시": (37.5034, 126.7660)},
+    "인천광역시": {"전체": (37.4563, 126.7052)},
+    "강원특별자치도": {"춘천시": (37.8813, 127.7300), "강릉시": (37.7519, 128.8761), "원주시": (37.3422, 127.9201)},
+    "충청남도": {"천안시": (36.8143, 127.1493), "아산시": (36.7862, 127.0041), "당진시": (36.8927, 126.6283), "서산시": (36.7845, 126.4503)},
+    "충청북도": {"청주시": (36.6372, 127.4897), "충주시": (36.9910, 127.9259)},
+    "대전광역시": {"전체": (36.3504, 127.3845)},
+    "세종특별자치시": {"전체": (36.4801, 127.2890)},
+    "전북특별자치도": {"전주시": (35.8242, 127.1480), "군산시": (35.9677, 126.7366), "익산시": (35.9482, 126.9573)},
+    "전라남도": {"목포시": (34.8118, 126.3922), "여수시": (34.7604, 127.6622), "순천시": (34.9506, 127.4872)},
+    "광주광역시": {"전체": (35.1595, 126.8526)},
+    "경상북도": {"포항시": (36.0190, 129.3435), "경주시": (35.8562, 129.2132), "구미시": (36.1195, 128.3443)},
+    "경상남도": {"창원시": (35.2281, 128.6811), "김해시": (35.2285, 128.8894), "진주시": (35.1713, 128.0568)},
+    "대구광역시": {"전체": (35.8714, 128.6014)},
+    "부산광역시": {"전체": (35.1796, 129.0756)},
+    "울산광역시": {"전체": (35.5389, 129.3114)},
+    "제주특별자치도": {"제주시": (33.4996, 126.5312), "서귀포시": (33.2541, 126.5601)}
+}
+
+# ─── 🧭 좌측 UI 전면 개편: 심플한 위치 설정 및 거리 필터 ───
+st.sidebar.markdown("### 📍 내 위치 기반 검색")
+
+# 1. 위치 설정 방식 안내 및 수동 선택
+st.sidebar.info("지도에 내 위치(GPS)를 띄우려면 브라우저 팝업에서 **위치 허용**을 눌러주세요. 거리 검색은 아래 지정한 지역을 기준으로 작동합니다.")
+
+selected_do = st.sidebar.selectbox("🗺️ 시/도 선택", list(REGION_COORDS.keys()), index=0)
+selected_si = st.sidebar.selectbox("🗺️ 시/군/구 선택", list(REGION_COORDS[selected_do].keys()), index=0)
+
+# 선택된 지역 좌표 할당 및 전체 데이터 거리 재계산
+USER_BASE_LAT, USER_BASE_LNG = REGION_COORDS[selected_do][selected_si]
 df['distance_km'] = df.apply(lambda r: calculate_distance(USER_BASE_LAT, USER_BASE_LNG, r['lat'], r['lng']), axis=1)
 
-# 세션 상태 변수 초기화
-if 'survey_active' not in st.session_state: st.session_state.survey_active = False
-if 'survey_step' not in st.session_state: st.session_state.survey_step = 1
-if 'show_popup' not in st.session_state: st.session_state.show_popup = False
+# 2. 반경 거리 제한 슬라이더
+distance_limit = st.sidebar.slider(f"🎯 [{selected_si}] 기준 반경 (km)", 10, 500, 200, 10)
 
-# 퀴즈 상태 머신
-if 'tmp_concept' not in st.session_state: st.session_state.tmp_concept = "🌍 상관없음 (전체)"
-if 'tmp_style' not in st.session_state: st.session_state.tmp_style = "ALL (전체)"
-if 'tmp_distances' not in st.session_state: st.session_state.tmp_distances = ["10K"]
-if 'tmp_scale' not in st.session_state: st.session_state.tmp_scale = "ALL (전체)"
-if 'tmp_max_fee' not in st.session_state: st.session_state.tmp_max_fee = 120000
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔍 추가 조건 필터")
+selected_status = st.sidebar.selectbox("🚦 모집 진행 상황", options=["전체"] + sorted(df['status'].unique().tolist()))
 
-# 확정 반영용 필터 스토리지
-if 'rec_concept' not in st.session_state: st.session_state.rec_concept = "🌍 상관없음 (전체)"
-if 'rec_style' not in st.session_state: st.session_state.rec_style = "ALL (전체)"
-if 'rec_scale' not in st.session_state: st.session_state.rec_scale = "ALL (전체)"
-if 'rec_distances' not in st.session_state: st.session_state.rec_distances = []
-if 'max_fee' not in st.session_state: st.session_state.max_fee = 150000
+# --- 데이터 필터링 파이프라인 ---
+filtered_df = df.copy()
 
+# 1차 필터링: 반경 거리 및 상태
+filtered_df = filtered_df[filtered_df['distance_km'] <= distance_limit]
+if selected_status != "전체": 
+    filtered_df = filtered_df[filtered_df['status'] == selected_status]
+
+# 2차 필터링: 팝업 퀴즈(설문) 결과 연동
 @st.dialog("🎯 나만의 마라톤 핏(Fit) 찾기 초스피드 Quiz")
 def show_survey_popup():
     step = st.session_state.survey_step
@@ -157,56 +206,27 @@ def show_survey_popup():
     
     if step == 1:
         st.markdown("#### **🎉 Q1. 어떤 테마/컨셉의 대회를 선호하시나요?**")
-        st.session_state.tmp_concept = st.radio(
-            "지루한 러닝은 거부한다! 당신의 취향은?", 
-            [
-                "🌍 상관없음 (전체 다 볼래요!)", 
-                "🥳 펀런 앤 페스티벌! (무도런/나는솔로런 같은 이색 이벤트)", 
-                "⛰️ 자연 속 야생 날것의 매력! (산악 트레일런)",
-                "⏱️ 클래식 도심 레이서! (전통 시티/강변 코스)"
-            ], 
-            index=0
-        )
-        
+        st.session_state.tmp_concept = st.radio("지루한 러닝은 거부한다! 당신의 취향은?", ["🌍 상관없음 (전체 다 볼래요!)", "🥳 펀런 앤 페스티벌! (무도런/나는솔로런 같은 이색 이벤트)", "⛰️ 자연 속 야생 날것의 매력! (산악 트레일런)", "⏱️ 클래식 도심 레이서! (전통 시티/강변 코스)"], index=0)
     elif step == 2:
         st.markdown("#### **🏁 Q2. 이번에 목표로 하는 타겟 코스는 무엇인가요?**")
-        st.session_state.tmp_distances = st.multiselect(
-            "다중 선택 가능", 
-            ["5K", "10K", "Half", "Full", "장거리 (60km 이상)"], 
-            default=st.session_state.tmp_distances
-        )
-        
+        st.session_state.tmp_distances = st.multiselect("다중 선택 가능", ["5K", "10K", "Half", "Full", "장거리 (60km 이상)"], default=st.session_state.tmp_distances)
     elif step == 3:
         st.markdown("#### **👥 Q3. 대회장 인파 및 인프라 규모는 어느 정도가 좋으세요?**")
-        st.session_state.tmp_scale = st.radio(
-            "축제 규모 픽하기", 
-            ["ALL (전체)", "대규모 (1만명 이상)", "중규모 (3천명~1만명)", "소규모 (3천명 미만)"], 
-            index=0
-        )
-        
+        st.session_state.tmp_scale = st.radio("축제 규모 픽하기", ["ALL (전체)", "대규모 (1만명 이상)", "중규모 (3천명~1만명)", "소규모 (3천명 미만)"], index=0)
     elif step == 4:
         st.markdown("#### **⚡ Q4. 본인의 페이스 조절 및 난이도 성향은?**")
-        st.session_state.tmp_style = st.radio(
-            "러닝 스타일 결정", 
-            ["ALL (전체)", "초보 러너 (완주 목표)", "PB 도전 (기록 달성)"], 
-            index=0
-        )
-        
+        st.session_state.tmp_style = st.radio("러닝 스타일 결정", ["ALL (전체)", "초보 러너 (완주 목표)", "PB 도전 (기록 달성)"], index=0)
     elif step == 5:
         st.markdown("#### **💰 Q5. 지갑 사정을 고려한 참가비 상한선은?**")
-        st.session_state.tmp_max_fee = st.slider(
-            "최대 허용 참가비(원)", 
-            30000, 150000, st.session_state.tmp_max_fee, 5000
-        )
+        st.session_state.tmp_max_fee = st.slider("최대 허용 참가비(원)", 30000, 150000, st.session_state.tmp_max_fee, 5000)
 
     st.markdown("<br>", unsafe_allow_html=True)
     
     b_col1, b_col2 = st.columns([1, 1])
     with b_col1:
-        if step > 1:
-            if st.button("⬅️ 이전 단계", use_container_width=True):
-                st.session_state.survey_step -= 1
-                st.rerun()
+        if step > 1 and st.button("⬅️ 이전 단계", use_container_width=True):
+            st.session_state.survey_step -= 1
+            st.rerun()
     with b_col2:
         if step < 5:
             if st.button("다음 단계로 ➡️", use_container_width=True):
@@ -219,13 +239,11 @@ def show_survey_popup():
                 st.session_state.rec_scale = st.session_state.tmp_scale
                 st.session_state.rec_style = st.session_state.tmp_style
                 st.session_state.max_fee = st.session_state.tmp_max_fee
-                
                 st.session_state.survey_active = True
                 st.session_state.show_popup = False
                 st.session_state.survey_step = 1
                 st.rerun()
 
-# 💡 개선 포인트 3: 버튼 텍스트 단순화 + 큰 사이즈 적용을 위한 키 컨테이너
 with st.container(key="top_action_buttons"):
     c_pop1, c_pop2 = st.columns([2, 1])
     with c_pop1:
@@ -234,27 +252,12 @@ with st.container(key="top_action_buttons"):
             st.session_state.show_popup = True
             st.rerun()
     with c_pop2:
-        if st.button("🌐 조건 해제 (전체 대회 보기)", use_container_width=True):
+        if st.button("🌐 핏(Fit) 조건 해제", use_container_width=True):
             st.session_state.survey_active = False
             st.rerun()
 
 if st.session_state.show_popup:
     show_survey_popup()
-
-# ─── 🔍 사이드바 기본 행정망 필터 ───
-st.sidebar.header("🔍 상세 행정망 필터")
-with st.sidebar.form(key='sidebar_search_trigger'):
-    selected_region = st.selectbox("📍 개최 권역", options=["전체"] + sorted(df['location'].unique().tolist()))
-    selected_status = st.selectbox("🚦 모집 진행 상황", options=["전체"] + sorted(df['status'].unique().tolist()))
-    max_dist_filter = st.slider("🚗 내 거점(천안) 기준 반경 (km)", 10, 300, 200, 10)
-    submit_sidebar = st.form_submit_button(label="🔍 조건 반영하여 검색하기", use_container_width=True)
-
-# 데이터 필터링 파이프라인
-filtered_df = df.copy()
-
-if selected_region != "전체": filtered_df = filtered_df[filtered_df['location'] == selected_region]
-if selected_status != "전체": filtered_df = filtered_df[filtered_df['status'] == selected_status]
-filtered_df = filtered_df[filtered_df['distance_km'] <= max_dist_filter]
 
 if st.session_state.survey_active:
     if "상관없음" not in st.session_state.rec_concept:
@@ -374,48 +377,64 @@ with col_map:
                     }})(marker, infowindow));
                 """
 
+# =======================================================================
+    # 🗺️ 카카오맵 렌더링 HTML 및 GPS 자동 동기화 로직 (오류 수정본)
+    # =======================================================================
     map_html = f"""
-        <div id="map" style="width:100%;height:530px;border-radius:12px;box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+        <div id="map" style="width:100%; height:550px; border-radius:15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+        
         <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785"></script>
         <script>
-            var activeInfoWindow = null;
+            // 페이지 로드 후 지도 초기화
             setTimeout(function() {{
-                var container = document.getElementById('map');
-                var options = {{
-                    center: new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG}),
-                    level: 11
-                }};
-                var map = new kakao.maps.Map(container, options);
+                var mapContainer = document.getElementById('map');
                 
+                // 1. 좌측 사이드바에서 수동 선택한 좌표로 기본 세팅
+                var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
+                var mapOption = {{ 
+                    center: defaultPos, 
+                    level: 9 // 전국 단위 검색이 많으므로 레벨을 조금 넓게 설정
+                }}; 
+
+                var map = new kakao.maps.Map(mapContainer, mapOption); 
+                var activeInfoWindow = null;
+
+                // 2. 브라우저 GPS 권한 묻기 및 파란색 '내 위치' 마커 표시
                 if (navigator.geolocation) {{
                     navigator.geolocation.getCurrentPosition(function(position) {{
                         var lat = position.coords.latitude;
                         var lon = position.coords.longitude;
                         var locPosition = new kakao.maps.LatLng(lat, lon);
                         
-                        var markerImage = new kakao.maps.MarkerImage(
-                            'https://t1.daumcdn.net/localimg/localimages/07/2018/pc/img/marker_spot.png',
-                            new kakao.maps.Size(24, 35)
-                        );
-                        var locMarker = new kakao.maps.Marker({{
-                            map: map,
-                            position: locPosition,
-                            image: markerImage
-                        }});
-                        
                         var customOverlay = new kakao.maps.CustomOverlay({{
                             position: locPosition,
-                            content: '<div style="background-color:#2563EB; color:white; padding:3px 8px; border-radius:10px; font-size:10px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">내 위치</div>',
-                            yAnchor: 2.5
+                            content: '<div style="background-color:#2563EB; color:white; padding:5px 10px; border-radius:20px; font-size:12px; font-weight:bold; border: 2px solid white; box-shadow:0 2px 4px rgba(0,0,0,0.3);">📍 내 실제 위치</div>',
+                            yAnchor: 1.5
                         }});
                         customOverlay.setMap(map);
+                        
+                        // GPS 권한을 허용했다면 지도의 중심을 내 실제 위치로 스무스하게 이동
+                        map.panTo(locPosition);
+                        
+                    }}, function(error) {{
+                        console.warn("GPS 권한 거부 또는 실패. 수동 선택된 기준점(사이드바)을 유지합니다.");
+                        
+                        // GPS 거부 시 수동 선택 지역에 회색 마커 표시
+                        var fallbackOverlay = new kakao.maps.CustomOverlay({{
+                            position: defaultPos,
+                            content: '<div style="background-color:#64748B; color:white; padding:5px 10px; border-radius:20px; font-size:12px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.3);">📌 기준 거점</div>',
+                            yAnchor: 1.5
+                        }});
+                        fallbackOverlay.setMap(map);
                     }});
                 }}
+
+                // 3. 파이썬에서 넘겨준 마라톤 대회 마커들 렌더링
                 {marker_js}
-            }}, 400);
+            }}, 300);
         </script>
     """
-    st.components.v1.html(map_html, height=550)
+    st.components.v1.html(map_html, height=570)
 
 st.markdown("---")
 # 💡 개선 포인트 4: 데이터 동기화 버튼 클릭 시 캐시를 지우고 새로 불러오도록 변경
