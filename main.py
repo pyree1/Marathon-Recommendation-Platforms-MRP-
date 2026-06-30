@@ -376,7 +376,7 @@ with col_map:
 
     map_html = f"""
         <div id="map" style="width:100%;height:530px;border-radius:12px;box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
-        <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785"></script>
+        <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785"></script>
         <script>
             var activeInfoWindow = null;
             setTimeout(function() {{
