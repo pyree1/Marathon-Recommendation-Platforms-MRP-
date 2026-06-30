@@ -300,11 +300,14 @@ col_list, col_map = st.columns([1.5, 1.0])
 with col_list:
     view_type = "🎯 맞춤 매칭 결과" if st.session_state.survey_active else "🌐 대한민국 전체 대회"
     st.markdown(f'<div class="section-title-large">{view_type} ({len(filtered_df)}건)</div>', unsafe_allow_html=True)
+    # [수정 시작] 데이터 루프 돌기 직전에 http를 https로 강제 변환
+    filtered_df['poster'] = filtered_df['poster'].str.replace('http://', 'https://', regex=False)
+    filtered_df['link'] = filtered_df['link'].str.replace('http://', 'https://', regex=False)
     
     if filtered_df.empty:
-        st.warning("앗! 조건에 딱 들어맞는 대회가 아쉽게도 없습니다. 팝업 설문을 다시 실행해 범위를 넓혀보세요!")
+        st.warning("앗! 조건에 딱 들어맞는 대회가 아쉽게도 없습니다.")
     else:
-        with st.container(height=650):
+        with st.container(height=650):  
             for _, row in filtered_df.iterrows():
                 with st.container(border=True):
                     card_img, card_left, card_right = st.columns([0.8, 2.1, 1.1])
@@ -385,14 +388,18 @@ with col_map:
     map_html = f"""
         <div id="map" style="width:100%; height:550px; border-radius:15px;"></div>
         
-        <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785&autoload=false"></script>
+        <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=e265c9f38550c96c11e4736da26fb785&autoload=false"></script>
         <script>
-            // API가 로드된 후 실행하도록 설정
             kakao.maps.load(function() {{
                 var mapContainer = document.getElementById('map');
                 var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
-                var mapOption = {{ center: defaultPos, level: 9 }}; 
-                var map = new kakao.maps.Map(mapContainer, mapOption);
+                var mapOption = {{ 
+                    center: defaultPos, 
+                    level: 9 
+                }}; 
+
+                var map = new kakao.maps.Map(mapContainer, mapOption); 
+                var activeInfoWindow = null;
                 
                 // 1. 좌측 사이드바에서 수동 선택한 좌표로 기본 세팅
                 var defaultPos = new kakao.maps.LatLng({USER_BASE_LAT}, {USER_BASE_LNG});
@@ -436,7 +443,7 @@ with col_map:
 
                 // 3. 파이썬에서 넘겨준 마라톤 대회 마커들 렌더링
                 {marker_js}
-            }}, 300);
+            }});
         </script>
     """
     st.components.v1.html(map_html, height=570)
